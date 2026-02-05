@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>現代冥想倒數計時器</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 Tone.js 用於播放提示音 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        /* 定義跳動動畫 (Thumping Animation) */
+        @keyframes thump {
+            0%, 100% { transform: scale(1.0); }
+            50% { transform: scale(1.02); }
+        }
+        /* 套用跳動動畫和柔和陰影，使其看起來像在脈動 */
+        .thumping-animation {
+            animation: thump 1.5s ease-in-out infinite;
+            box-shadow: 0 0 50px rgba(192, 132, 252, 0.8); /* 紫色柔和光暈 */
+        }
+
+        /* 設定字體和背景漸層 */
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); /* 藍色至紫色漸層 */
+            transition: background-color 0.5s ease;
+        }
+
+        /* 隱藏原生 focus 輪廓，使用自定義樣式 */
+        button:focus {
+            outline: none;
+        }
+
+        /* 確保行動裝置上有良好的觸控目標大小 */
+        .control-button {
+            min-width: 120px;
+            padding: 1rem 2rem;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div id="timer-card" class="w-full max-w-xl p-6 sm:p-10 rounded-3xl shadow-2xl bg-white/10 backdrop-blur-sm border border-white/20 transition-all duration-500">
+        
+        <h1 id="title-text" class="text-xl sm:text-3xl font-light text-white text-center mb-8 tracking-wider transition-opacity duration-500 opacity-90">
+            冥想計時器
+        </h1>
+
+        <!-- 時間顯示區塊 -->
+        <div id="time-display" class="text-7xl sm:text-9xl font-extrabold text-white text-center select-none tracking-tighter cursor-default transition-all duration-300">
+            15:00
+        </div>
+        
+        <!-- 狀態訊息 -->
+        <p id="status-message" class="text-lg text-white text-center mt-4 h-6 opacity-0 transition-opacity duration-500">
+            <!-- 狀態訊息將顯示在此 (例如: "冥想結束!") -->
+        </p>
+
+        <!-- 預設時間按鈕 -->
+        <div class="flex flex-wrap justify-center gap-3 mt-10">
+            <button data-duration="900" class="preset-btn text-xs sm:text-sm px-4 py-2 rounded-full border border-white/50 text-white hover:bg-white/20 transition duration-200">15 分鐘</button>
+            <button data-duration="600" class="preset-btn text-xs sm:text-sm px-4 py-2 rounded-full border border-white/50 text-white hover:bg-white/20 transition duration-200">10 分鐘</button>
+            <button data-duration="1800" class="preset-btn text-xs sm:text-sm px-4 py-2 rounded-full border border-white/50 text-white hover:bg-white/20 transition duration-200">30 分鐘</button>
+            <button data-duration="3600" class="preset-btn text-xs sm:text-sm px-4 py-2 rounded-full border border-white/50 text-white hover:bg-white/20 transition duration-200">60 分鐘</button>
+        </div>
+
+        <!-- 按鈕來切換自定義輸入 -->
+        <div class="flex justify-center mt-6 mb-4">
+            <button id="toggle-custom-btn" class="text-white/80 hover:text-white text-sm font-light underline transition duration-200">
+                或設定自定義時間
+            </button>
+        </div>
+
+        <!-- 自定義時間輸入區塊 (預設隱藏) - 加入了秒數輸入 -->
+        <div id="custom-input-container" class="mb-8 p-4 rounded-xl bg-white/10 hidden">
+            <label class="text-white text-sm block mb-2">設定自定義時間:</label>
+            <div class="flex gap-2 items-center">
+                <!-- 分鐘輸入 -->
+                <input type="number" id="custom-minutes" min="0" max="360" value="15" class="w-1/3 p-3 rounded-lg text-lg text-indigo-800 bg-white/80 focus:ring-2 focus:ring-indigo-300 focus:outline-none" aria-label="自定義分鐘數">
+                <span class="text-white text-base">分</span>
+                <!-- 秒數輸入 -->
+                <input type="number" id="custom-seconds" min="0" max="59" value="0" class="w-1/3 p-3 rounded-lg text-lg text-indigo-800 bg-white/80 focus:ring-2 focus:ring-indigo-300 focus:outline-none" aria-label="自定義秒數">
+                <span class="text-white text-base">秒</span>
+                <button id="set-custom-btn" class="bg-indigo-500 text-white px-3 py-3 rounded-lg hover:bg-indigo-600 transition duration-200 transform hover:scale-105 active:scale-95 whitespace-nowrap">設定</button>
+            </div>
+        </div>
+
+        <!-- 主要控制按鈕區塊 -->
+        <div class="flex flex-wrap justify-center gap-4 mt-6">
+            <button id="start-pause-btn" 
+                    class="control-button bg-white text-indigo-600 hover:bg-indigo-100 font-semibold rounded-full shadow-lg transition-all duration-300 transform hover:scale-105 active:scale-95 focus:ring-4 focus:ring-indigo-300">
+                開始
+            </button>
+            <button id="reset-btn" 
+                    class="control-button bg-transparent border border-white text-white hover:bg-white/20 font-semibold rounded-full shadow-md transition-all duration-300 transform hover:scale-105 active:scale-95 focus:ring-4 focus:ring-white/50"
+                    disabled>
+                重設
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // 設定全域變數
+        const initialDefaultDuration = 15 * 60; // 預設的初始長度 (15 分鐘)
+        let currentDuration = initialDefaultDuration; // 當前設定的計時長度（秒）
+        let countdownSeconds = currentDuration;
+        let timerInterval = null;
+        let isRunning = false;
+        let isFinished = false;
+
+        // 取得 DOM 元素
+        const timeDisplay = document.getElementById('time-display');
+        const startPauseBtn = document.getElementById('start-pause-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const timerCard = document.getElementById('timer-card');
+        const statusMessage = document.getElementById('status-message');
+        const titleText = document.getElementById('title-text');
+        
+        const presetButtons = document.querySelectorAll('.preset-btn');
+        const toggleCustomBtn = document.getElementById('toggle-custom-btn');
+        const customInputContainer = document.getElementById('custom-input-container');
+        const customMinutesInput = document.getElementById('custom-minutes');
+        // 新增秒數輸入欄位
+        const customSecondsInput = document.getElementById('custom-seconds');
+        const setCustomBtn = document.getElementById('set-custom-btn');
+
+        // 初始化 Tone.js 簡易合成器，用於發出低沉提示音
+        const synth = new Tone.Synth().toDestination();
+
+        /**
+         * 將秒數轉換為 M:SS 格式的字串 (或 H:MM:SS 如果超過一小時)
+         * @param {number} totalSeconds - 總秒數
+         * @returns {string} 格式化後的時間字串
+         */
+        function formatTime(totalSeconds) {
+            const absSeconds = Math.abs(totalSeconds);
+            const hours = Math.floor(absSeconds / 3600);
+            const minutes = Math.floor((absSeconds % 3600) / 60);
+            const seconds = absSeconds % 60;
+            
+            const paddedSeconds = seconds.toString().padStart(2, '0');
+            const paddedMinutes = minutes.toString().padStart(2, '0');
+
+            if (hours > 0) {
+                return `${hours}:${paddedMinutes}:${paddedSeconds}`;
+            }
+            return `${minutes}:${paddedSeconds}`;
+        }
+
+        /**
+         * 更新畫面上的時間顯示和按鈕狀態
+         */
+        function updateDisplay() {
+            timeDisplay.textContent = formatTime(countdownSeconds);
+
+            if (countdownSeconds <= 0 && !isFinished) {
+                completeTimer();
+            }
+
+            // 更新按鈕文字
+            if (isRunning) {
+                startPauseBtn.textContent = '暫停';
+                resetBtn.disabled = false;
+            } else if (isFinished) {
+                startPauseBtn.textContent = '完成';
+                startPauseBtn.disabled = true;
+                resetBtn.disabled = false;
+            } else {
+                startPauseBtn.textContent = (countdownSeconds === currentDuration) ? '開始' : '繼續';
+                resetBtn.disabled = (countdownSeconds === currentDuration);
+            }
+        }
+
+        /**
+         * 開始或繼續計時器
+         */
+        function startTimer() {
+            if (isRunning || isFinished) return;
+            // 確保計時器有有效的時間長度
+            if (currentDuration <= 0) {
+                statusMessage.textContent = '請設定有效的時間！';
+                statusMessage.classList.add('opacity-100', 'text-yellow-300');
+                return;
+            }
+
+
+            isRunning = true;
+            timerCard.classList.remove('thumping-animation');
+            statusMessage.classList.remove('opacity-100', 'text-yellow-300');
+            statusMessage.textContent = '';
+            titleText.classList.add('opacity-100');
+
+            timerInterval = setInterval(() => {
+                countdownSeconds--;
+                updateDisplay();
+                if (countdownSeconds <= 0) {
+                    clearInterval(timerInterval);
+                }
+            }, 1000);
+            updateDisplay();
+        }
+
+        /**
+         * 暫停計時器
+         */
+        function pauseTimer() {
+            if (!isRunning) return;
+
+            isRunning = false;
+            clearInterval(timerInterval);
+            updateDisplay();
+        }
+
+        /**
+         * 設定新的計時長度並重設計時器狀態
+         * @param {number} newDuration - 以秒為單位的新長度
+         */
+        function setDuration(newDuration) {
+            // 檢查新長度是否有效且大於 0
+            if (newDuration <= 0) return;
+
+            // 停止計時
+            clearInterval(timerInterval);
+
+            // 確保在重設時停止任何可能的殘響音
+            if (synth) {
+                // 使用 triggerRelease 停止任何正在播放的聲音
+                synth.triggerRelease();
+            }
+
+            // 更新長度變數
+            currentDuration = newDuration;
+            countdownSeconds = currentDuration;
+            isRunning = false;
+            isFinished = false;
+
+            // 更新標題
+            const minutes = Math.floor(newDuration / 60);
+            titleText.textContent = `冥想計時器 (${minutes} 分鐘)`;
+            
+            // 清除動畫和狀態訊息
+            timerCard.classList.remove('thumping-animation');
+            statusMessage.classList.remove('opacity-100', 'text-yellow-300');
+            statusMessage.textContent = '';
+            titleText.classList.add('opacity-100');
+            startPauseBtn.disabled = false;
+
+            updateDisplay();
+        }
+        
+        /**
+         * 重設計時器 (使用 currentDuration)
+         */
+        function resetTimer() {
+            setDuration(currentDuration);
+        }
+
+
+        /**
+         * 計時完成處理
+         */
+        function completeTimer() {
+            isFinished = true;
+            isRunning = false;
+            
+            // 播放低沉提示音 (單音 G4)
+            try {
+                // Tone.js 需要在使用者互動後才能啟動 AudioContext
+                if (Tone.context.state !== 'running') {
+                    Tone.start();
+                }
+                const now = Tone.now();
+                const duration = "0.7"; // 聲音長度
+                
+                // 【已修正】使用 triggerAttackRelease 確保聲音會在單音合成器上正確播放和停止
+                synth.triggerAttackRelease("G4", duration, now);
+
+            } catch (e) {
+                console.error("無法播放聲音:", e);
+                // 忽略錯誤，讓計時器繼續運作
+            }
+
+            // 應用跳動動畫
+            timerCard.classList.add('thumping-animation');
+            
+            // 顯示完成訊息
+            statusMessage.textContent = '冥想結束！🧘';
+            statusMessage.classList.add('opacity-100');
+            titleText.classList.remove('opacity-100');
+
+
+            updateDisplay();
+        }
+
+        // --- 事件監聽器 ---
+
+        /**
+         * 處理開始/暫停按鈕點擊
+         */
+        startPauseBtn.addEventListener('click', () => {
+            if (isRunning) {
+                pauseTimer();
+            } else if (!isFinished) {
+                startTimer();
+            }
+        });
+
+        /**
+         * 處理重設按鈕點擊
+         */
+        resetBtn.addEventListener('click', resetTimer);
+        
+        /**
+         * 處理預設時間按鈕點擊
+         */
+        presetButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const durationSeconds = parseInt(this.dataset.duration);
+                setDuration(durationSeconds);
+                // 確保在設定新時間時，custom input 隱藏
+                customInputContainer.classList.add('hidden');
+                toggleCustomBtn.textContent = '或設定自定義時間';
+            });
+        });
+
+        /**
+         * 處理切換自定義輸入按鈕點擊
+         */
+        toggleCustomBtn.addEventListener('click', () => {
+            const isHidden = customInputContainer.classList.toggle('hidden');
+            toggleCustomBtn.textContent = isHidden ? '或設定自定義時間' : '隱藏自定義設定';
+        });
+
+        /**
+         * 處理設定自定義時間按鈕點擊
+         */
+        setCustomBtn.addEventListener('click', () => {
+            // 從輸入欄位取得分鐘數和秒數
+            const minutes = parseInt(customMinutesInput.value || 0); // 若空白則視為 0
+            const seconds = parseInt(customSecondsInput.value || 0); // 若空白則視為 0
+
+            const totalDuration = (minutes * 60) + seconds;
+
+            // 驗證輸入：至少有一秒，且分鐘數不超過 360，秒數不超過 59
+            if (totalDuration > 0 && minutes >= 0 && minutes <= 360 && seconds >= 0 && seconds < 60) {
+                setDuration(totalDuration);
+                // 隱藏輸入框
+                customInputContainer.classList.add('hidden');
+                toggleCustomBtn.textContent = '或設定自定義時間';
+
+            } else {
+                // 錯誤處理
+                let message = '請輸入 1 秒到 360 分鐘內的時間！';
+                
+                // 清除舊的錯誤邊框
+                customMinutesInput.classList.remove('border-red-500', 'border-2');
+                customSecondsInput.classList.remove('border-red-500', 'border-2');
+
+                // 標示錯誤欄位
+                if (totalDuration <= 0) {
+                     customMinutesInput.classList.add('border-red-500', 'border-2');
+                     customSecondsInput.classList.add('border-red-500', 'border-2');
+                } else if (minutes > 360) {
+                     customMinutesInput.classList.add('border-red-500', 'border-2');
+                     message = '分鐘數不得超過 360！';
+                } else if (seconds >= 60 || seconds < 0) {
+                     customSecondsInput.classList.add('border-red-500', 'border-2');
+                     message = '秒數必須在 0 到 59 之間！';
+                }
+
+                statusMessage.textContent = message;
+                statusMessage.classList.add('opacity-100', 'text-yellow-300');
+                
+                // 錯誤訊息短暫顯示後移除
+                setTimeout(() => {
+                    customMinutesInput.classList.remove('border-red-500', 'border-2');
+                    customSecondsInput.classList.remove('border-red-500', 'border-2');
+                    statusMessage.classList.remove('opacity-100', 'text-yellow-300');
+                    statusMessage.textContent = '';
+                }, 3000);
+            }
+        });
+
+
+        // 頁面載入時初始化顯示
+        window.onload = () => setDuration(initialDefaultDuration);
+
+    </script>
+</body>
+</html>
